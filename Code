@@ -1,0 +1,61 @@
+import socket
+import select
+import struct
+import fcntl
+import os
+import subprocess
+import sys
+
+# Simple XOR "encryption" (demo only)
+def xor(data: bytes, key: bytes) -> bytes:
+    return bytes([b ^ key[i % len(key)] for i, b in enumerate(data)])
+
+# Create TUN interface
+def create_tun(name="tun0"):
+    TUNSETIFF = 0x400454ca
+    IFF_TUN = 0x0001
+    IFF_NO_PI = 0x1000
+
+    tun = os.open("/dev/net/tun", os.O_RDWR)
+    ifr = struct.pack("16sH", name.encode(), IFF_TUN | IFF_NO_PI)
+    fcntl.ioctl(tun, TUNSETIFF, ifr)
+    return tun
+
+# Configure interface (IP and bring up)
+def configure_tun(tun_name, local_ip, peer_ip):
+    subprocess.run(["ip", "link", "set", tun_name, "up"], check=True)
+    subprocess.run(["ip", "addr", "add", f"{local_ip}/24", "dev", tun_name], check=True)
+    # Optional: route all traffic (careful!)
+    # subprocess.run(["ip", "route", "add", "default", "via", peer_ip, "dev", tun_name], check=True)
+
+# VPN Server
+def vpn_server(listen_port=1337, local_ip="10.0.0.1", peer_ip="10.0.0.2", key=b"secretkey123"):
+    tun_name = "tun0"
+    tun = create_tun(tun_name)
+    configure_tun(tun_name, local_ip, peer_ip)
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(("0.0.0.0", listen_port))
+    print(f"VPN Server listening on UDP port {listen_port}... (Local IP: {local_ip})")
+
+    while True:
+        readable, _, _ = select.select([tun, sock], [], [])
+        for r in readable:
+            if r == tun:
+                # Packet from local TUN → send to client
+                packet = os.read(tun, 65535)
+                encrypted = xor(packet, key)
+                # In a real app you'd send to the client's known address (here we assume peer is fixed)
+                sock.sendto(encrypted, ("127.0.0.1", listen_port))  # Change to real client IP
+            elif r == sock:
+                # Packet from client → write to TUN
+                data, addr = sock.recvfrom(65535)
+                decrypted = xor(data, key)
+                os.write(tun, decrypted)
+                print(f"Received packet from {addr}")
+
+if __name__ == "__main__":
+    if os.geteuid() != 0:
+        print("Run with sudo!")
+        sys.exit(1)
+    vpn_server()

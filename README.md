@@ -5,3 +5,16 @@ This is for educational purposes only.
 XOR encryption is not secure — use it only for learning.
 Run with sudo (needed for TUN device).
 Test in a safe environment (two machines or VMs).
+
+
+Improvements You Can Add
+
+Use proper encryption (e.g., cryptography Fernet or AES).
+Dynamic peer discovery (store client address on first packet).
+Handle multiple clients.
+Add authentication.
+Use scapy for packet inspection.
+Add SSL/TLS over the UDP socket for better security.
+
+For a more complete example with better structure, check open-source projects like the "CrapVPN" demo or simple TUN/UDP tunnels on GitHub.
+Would you like a version with better encryption, TCP transport, or for a different language (Node.js, Go, etc.)? Let me know your platform (Linux/Windows) and requirements!
